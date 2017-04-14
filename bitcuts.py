@@ -158,71 +158,40 @@ def build_tree(ruleset, ruleset_text):
     # node format: [tree-depth, parent-bit-array, msg]
     node_stack = []
     node_stack.append([0, [], ruleset, ''])  # root node
+
     while len(node_stack):
         curr_depth, parent_bit_array, curr_ruleset, curr_msg = node_stack.pop()
-        # format: {bit: pair_dict}. Here pair_dict is the dictionary of rule
-        # pairs. All the pairs this bit can separate are set to 1
-        bit_pair_dict = {}
-        bit_pair_size = {}  # format: {bit: pair_size}
-        pair_num = 0
 
         if curr_depth > max_depth:
             max_depth = curr_depth
         avaliable_bit_array = list(set(range(BIT_LENGTH))-set(parent_bit_array))
-        for bit in avaliable_bit_array:
-            bit_pair_dict[bit] = bit_separation_info(curr_ruleset, bit)
-            bit_pair_size[bit] = pair_count(bit_pair_dict[bit])
-            if curr_depth == 0:
-                logger.debug("bit %d : %d"%(bit, bit_pair_size[bit]))
-            pair_num += bit_pair_size[bit]
 
-        origin_rule_num = len(curr_ruleset)
-        max_bucket_size = origin_rule_num
-        max_bucket_num = 1
-        if pair_num == 0:
-            logger.debug("Cannot continue to split by single bit")
-            return
+        if curr_depth == 0:
+            verbose = True
+        else:
+            verbose = False
+        bit_array, further_separable, split_info = bit_select(curr_ruleset,
+                                                   avaliable_bit_array, verbose)
 
-        # select cutting bits
-        bit_array = []
-        splitting_stucked = False
-        while max_bucket_size > 1:
-            # select the best bit in terms of "separability":
-            sorted_bit_pair_size = sorted(bit_pair_size.items(),
-                key=lambda x:x[1], reverse=True)
-            # to prevent to be stucked
-            if sorted_bit_pair_size[0][1] == 0:
-                logger.debug("Cannot continue to split by single bit")
-                splitting_stucked = True
-                break
-            bit_selected = sorted_bit_pair_size[0][0]
-            logger.debug("Add bit %d"%bit_selected)
-            bit_array.append(bit_selected)
-            # update the pair-dict
-            for bit, bit_pair in bit_pair_dict.iteritems():
-                if bit != bit_selected:
-                    pair_dict_sub(bit_pair_dict[bit],
-                        bit_pair_dict[bit_selected])
-                    bit_pair_size[bit] = pair_count(bit_pair_dict[bit])
-            del bit_pair_dict[bit_selected]
-            del bit_pair_size[bit_selected]
-            buckets, max_bucket_size, max_bucket_num, bucket_percentage_stat = \
-                split_ruleset(curr_ruleset, bit_array)
-            logger.debug("max_bucket_size %d, max_bucket_num %d" % (
-                max_bucket_size, max_bucket_num))
-            # Spfac calculate
-            children_rule_num = 0
-            children_node_num = 2 ** len(bit_array)
-            for (k, v) in bucket_percentage_stat.items():
-                children_rule_num += k * v * children_node_num
-            Spfac = (children_rule_num + children_node_num) / float(
-                origin_rule_num)
-            # Stopping criteria
-            if Spfac > SPFAC:
-                break
+        # if current non-leaf node cannnot be further splitted, turn it into
+        # leaf node
+        if not len(bit_array):
+            logger.debug("change current node to leaf node")
+            #for j, r in enumerate(curr_ruleset):
+            #    if j == 0:
+            #        result_file.write('\t' * level + new_msg + str(i) + ': ' + ruleset_text[r[DIM_MAX][0]][:-1] + '\n')
+            #    else:
+            #        result_file.write('\t' * level + len(new_msg + str(i) + ': ') * ' ' + ruleset_text[r[DIM_MAX][0]][:-1] + '\n')
+            total_leaf_number += 1
+            total_leaf_depth += curr_depth + len(curr_ruleset)
+            if max_leaf_depth < curr_depth + len(curr_ruleset):
+                max_leaf_depth = curr_depth + len(curr_ruleset)
+            # append memory cost for storing the rules
+            total_mem_size += len(curr_ruleset) * LINEAR_BUCKT_SIZE
+            continue
 
-        del bit_pair_dict
-
+        buckets, max_bucket_size, max_bucket_num, bucket_percentage_stat = \
+            split_info
         if curr_depth == 0:
             #result_file.write("Basic bit array: %r\n\n" % bit_array)
             new_msg = curr_msg
@@ -231,6 +200,8 @@ def build_tree(ruleset, ruleset_text):
         bit_array = bit_array + parent_bit_array
         logger.debug("Current length %d bit_array: %r" % (len(bit_array),
             bit_array))
+
+
         # If rule-num of every bucket is no more than BINTH, it means every
         # bucket will become leaf node. Then this level will be regarded as a
         # bottom level
@@ -242,7 +213,7 @@ def build_tree(ruleset, ruleset_text):
         # next level
         for idx, subset in enumerate(buckets):
             # Non-leaf node
-            if len(subset) > BINTH and splitting_stucked == False:
+            if len(subset) > BINTH and further_separable == True:
                 total_mem_size += NON_LEAF_BUCKET_STRUCTURE_SIZE
                 #result_file.write('\t' * curr_depth + new_msg + str(idx)
                 #    + ': \n')
@@ -270,6 +241,73 @@ def build_tree(ruleset, ruleset_text):
 
     return max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
         total_mem_size
+
+
+def bit_select(ruleset, avaliable_bit_array, verbose=False):
+    # format: {bit: pair_dict}. Here pair_dict is the dictionary of rule
+    # pairs. All the pairs this bit can separate are set to 1
+    bit_pair_dict = {}
+    bit_pair_size = {}  # format: {bit: pair_size}
+    pair_num = 0
+
+    # get pair info
+    for bit in avaliable_bit_array:
+        bit_pair_dict[bit] = bit_separation_info(ruleset, bit)
+        bit_pair_size[bit] = pair_count(bit_pair_dict[bit])
+        if verbose:
+            logger.debug("bit %d : %d"%(bit, bit_pair_size[bit]))
+        pair_num += bit_pair_size[bit]
+
+    origin_rule_num = len(ruleset)
+    max_bucket_size = origin_rule_num
+    max_bucket_num = 1
+    if pair_num == 0:
+        logger.debug("No single bit can be selected to split")
+        return [], False, []
+
+    # select cutting bits
+    bit_array = []
+    further_separable = True
+    while max_bucket_size > 1:
+        # select the best bit in terms of "separability":
+        sorted_bit_pair_size = sorted(bit_pair_size.items(),
+            key=lambda x:x[1], reverse=True)
+        # to prevent to be stucked
+        if sorted_bit_pair_size[0][1] == 0:
+            logger.debug("Cannot continue to split by single bit")
+            further_separable = False
+            break
+        bit_selected = sorted_bit_pair_size[0][0]
+        bit_array.append(bit_selected)
+
+        # update the pair-dict
+        for bit, bit_pair in bit_pair_dict.iteritems():
+            if bit != bit_selected:
+                pair_dict_sub(bit_pair_dict[bit],
+                    bit_pair_dict[bit_selected])
+                bit_pair_size[bit] = pair_count(bit_pair_dict[bit])
+        del bit_pair_dict[bit_selected]
+        del bit_pair_size[bit_selected]
+        buckets, max_bucket_size, max_bucket_num, bucket_percentage_stat = \
+            split_ruleset(ruleset, bit_array)
+        logger.debug("add bit %d" % bit_selected)
+        logger.debug("max_bucket_size %d, max_bucket_num %d" % (max_bucket_size,
+            max_bucket_num))
+
+        # Spfac calculate
+        children_rule_num = 0
+        children_node_num = 2 ** len(bit_array)
+        for (k, v) in bucket_percentage_stat.items():
+            children_rule_num += k * v * children_node_num
+        Spfac = (children_rule_num + children_node_num) / float(
+            origin_rule_num)
+        # Stopping criteria
+        if Spfac > SPFAC:
+            break
+
+    split_info = (buckets, max_bucket_size, max_bucket_num,
+                  bucket_percentage_stat)
+    return bit_array, further_separable, split_info
 
 
 # Generate bit separation information of the bit
