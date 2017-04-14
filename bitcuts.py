@@ -171,7 +171,7 @@ def build_tree(ruleset, ruleset_text):
         else:
             verbose = False
         bit_array, further_separable, split_info = bit_select(curr_ruleset,
-                                                   avaliable_bit_array, verbose)
+            avaliable_bit_array, verbose=verbose)
 
         # if current non-leaf node cannnot be further splitted, turn it into
         # leaf node
@@ -243,7 +243,8 @@ def build_tree(ruleset, ruleset_text):
         total_mem_size
 
 
-def bit_select(ruleset, avaliable_bit_array, verbose=False):
+def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
+    verbose=False):
     # format: {bit: pair_dict}. Here pair_dict is the dictionary of rule
     # pairs. All the pairs this bit can separate are set to 1
     bit_pair_dict = {}
@@ -302,7 +303,7 @@ def bit_select(ruleset, avaliable_bit_array, verbose=False):
         Spfac = (children_rule_num + children_node_num) / float(
             origin_rule_num)
         # Stopping criteria
-        if Spfac > SPFAC:
+        if Spfac > SPFAC or len(bit_array) >= max_bit_array_length:
             break
 
     split_info = (buckets, max_bucket_size, max_bucket_num,
