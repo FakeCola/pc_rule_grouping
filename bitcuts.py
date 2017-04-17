@@ -1,5 +1,7 @@
 #!/usr/bin/env python
 
+from __future__ import print_function
+
 import re
 import sys
 import copy
@@ -251,11 +253,23 @@ def grouping(ruleset, ruleset_txt, max_group_num):
     rule_refs = []
     for bucket in buckets:
         rule_refs.extend(map(lambda r: r[DIM_MAX][0], bucket))
-    rule_refs_counter = collections.Counter(rule_refs).values()
-    rule_refs_distribution = collections.Counter(rule_refs_counter)
+    rule_refs_cnt = collections.Counter(rule_refs).values()
+    rule_refs_distribution = collections.Counter(rule_refs_cnt)
     rule_refs_avg = sum(k * v for k, v in rule_refs_distribution.items()
                        ) / float(sum(rule_refs_distribution.values()))
-    print rule_refs_avg
+    subset1 = []
+    subset2 = []
+    for rule in ruleset:
+        rule_id = rule[DIM_MAX][0]
+        if rule_refs_cnt[rule_id] > rule_refs_avg:
+            subset2.append(rule)
+        else:
+            subset1.append(rule)
+
+    print("rule refs distribution: %s" % dict(rule_refs_distribution))
+    print("average rule refs: %f" % rule_refs_avg)
+    print("rule split finished, subset1:%d, subset2:%d" % (len(subset1),
+        len(subset2)))
     return rule_refs_distribution
 
 
@@ -412,11 +426,13 @@ if __name__ == '__main__':
         print('Usage: %s ruleset' % sys.argv[0])
         sys.exit(0)
     if len(sys.argv) == 2:
-        logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.INFO)
+        logging.basicConfig(format='%(levelname)s: %(message)s',
+            level=logging.INFO)
     else:
         for arg in sys.argv[2:]:
             if(arg == '--debug'):
-                logging.basicConfig(format='%(levelname)s: %(message)s', level=logging.DEBUG)
+                logging.basicConfig(format='%(levelname)s: %(message)s',
+                    level=logging.DEBUG)
 
     logger = logging.getLogger(__name__)
     filename = sys.argv[1] + '_result'
@@ -424,8 +440,7 @@ if __name__ == '__main__':
 
     start_time = time.clock()
     ruleset, ruleset_text = load_ruleset(sys.argv[1])
-    rule_ref_dict = grouping(ruleset, ruleset_text, 1)
-    print rule_ref_dict
+    grouping(ruleset, ruleset_text, 1)
     #max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
     #    total_mem_size = build_tree(ruleset, ruleset_text)
     end_time = time.clock()
