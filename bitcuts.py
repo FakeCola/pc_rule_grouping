@@ -243,8 +243,24 @@ def build_tree(ruleset, ruleset_text):
         total_mem_size
 
 
+def grouping(ruleset, ruleset_txt, max_group_num):
+    # build one-level tree
+    bit_array, _, split_info = bit_select(ruleset, range(BIT_LENGTH), 8,
+                                          use_spfac=False, verbose=True)
+    buckets, max_bucket_size, max_bucket_num, _ = split_info
+    rule_refs = []
+    for bucket in buckets:
+        rule_refs.extend(map(lambda r: r[DIM_MAX][0], bucket))
+    rule_refs_counter = collections.Counter(rule_refs).values()
+    rule_refs_distribution = collections.Counter(rule_refs_counter)
+    rule_refs_avg = sum(k * v for k, v in rule_refs_distribution.items()
+                       ) / float(sum(rule_refs_distribution.values()))
+    print rule_refs_avg
+    return rule_refs_distribution
+
+
 def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
-    verbose=False):
+    use_spfac=True, verbose=False):
     # format: {bit: pair_dict}. Here pair_dict is the dictionary of rule
     # pairs. All the pairs this bit can separate are set to 1
     bit_pair_dict = {}
@@ -303,7 +319,9 @@ def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
         Spfac = (children_rule_num + children_node_num) / float(
             origin_rule_num)
         # Stopping criteria
-        if Spfac > SPFAC or len(bit_array) >= max_bit_array_length:
+        if len(bit_array) >= max_bit_array_length:
+            break
+        if use_spfac and Spfac > SPFAC:
             break
 
     split_info = (buckets, max_bucket_size, max_bucket_num,
@@ -406,20 +424,22 @@ if __name__ == '__main__':
 
     start_time = time.clock()
     ruleset, ruleset_text = load_ruleset(sys.argv[1])
-    max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
-        total_mem_size = build_tree(ruleset, ruleset_text)
-    # result_file.write("total rules: %d\n"%len(ruleset)+'*'*20+'\n')
+    rule_ref_dict = grouping(ruleset, ruleset_text, 1)
+    print rule_ref_dict
+    #max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
+    #    total_mem_size = build_tree(ruleset, ruleset_text)
     end_time = time.clock()
-    average_access_time = float(total_leaf_depth)/float(total_leaf_number)
-    logger.info("average mem access: %f"%average_access_time)
-    logger.info("worst mem access: %d"%max_leaf_depth)
-    logger.info("mem size: %.2f KB"%(total_mem_size/1024.0))
-    logger.info("max level: %d"%max_depth)
-    logger.info("Preprocessing time is %.03f ms"%((end_time - start_time)*1000))
-    # result_file.write('\n'+'*'*20+'\n')
-    # result_file.write("total leaf number: %d\n"%total_leaf_number)
-    # result_file.write("average mem access: %f\n"%average_access_time)
-    # result_file.write("worst mem access: %d\n"%max_leaf_depth)
-    # result_file.write("mem size: %.2f KB\n"%(total_mem_size/1024.0))
-    # result_file.write("max level: %d\n"%max_depth)
-    # result_file.close()
+    ## result_file.write("total rules: %d\n"%len(ruleset)+'*'*20+'\n')
+    #average_access_time = float(total_leaf_depth)/float(total_leaf_number)
+    #logger.info("average mem access: %f"%average_access_time)
+    #logger.info("worst mem access: %d"%max_leaf_depth)
+    #logger.info("mem size: %.2f KB"%(total_mem_size/1024.0))
+    #logger.info("max level: %d"%max_depth)
+    #logger.info("Preprocessing time is %.03f ms"%((end_time - start_time)*1000))
+    ## result_file.write('\n'+'*'*20+'\n')
+    ## result_file.write("total leaf number: %d\n"%total_leaf_number)
+    ## result_file.write("average mem access: %f\n"%average_access_time)
+    ## result_file.write("worst mem access: %d\n"%max_leaf_depth)
+    ## result_file.write("mem size: %.2f KB\n"%(total_mem_size/1024.0))
+    ## result_file.write("max level: %d\n"%max_depth)
+    ## result_file.close()
