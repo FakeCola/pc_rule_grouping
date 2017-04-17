@@ -245,18 +245,40 @@ def build_tree(ruleset, ruleset_text):
         total_mem_size
 
 
-def grouping(ruleset, ruleset_txt, max_group_num):
+def grouping(ruleset, ruleset_txt, max_group_num=float('inf'),
+    max_remained_rules=100):
+    grouped_rulesets = []
+    subset2 = ruleset # for further grouping
+    group_idx = 0
+    while group_idx < max_group_num:
+        print("Group No.%d:" % group_idx)
+        subset1, subset2 = one_level_tree_grouping(subset2, 8)
+        grouped_rulesets.append(subset1)
+        group_idx += 1
+        if len(subset2) < max_remained_rules:
+            break
+    grouped_rulesets.append(subset2)
+    print("Grouping result:\nruleset nums: %s", map(len, grouped_rulesets))
+    return grouped_rulesets
+
+
+
+def one_level_tree_grouping(ruleset, max_bit_array_length):
     # build one-level tree
-    bit_array, _, split_info = bit_select(ruleset, range(BIT_LENGTH), 8,
-                                          use_spfac=False, verbose=True)
+    bit_array, _, split_info = bit_select(ruleset, range(BIT_LENGTH),
+        max_bit_array_length, use_spfac=False, verbose=True)
     buckets, max_bucket_size, max_bucket_num, _ = split_info
+
+    # count replication
     rule_refs = []
     for bucket in buckets:
         rule_refs.extend(map(lambda r: r[DIM_MAX][0], bucket))
-    rule_refs_cnt = collections.Counter(rule_refs).values()
-    rule_refs_distribution = collections.Counter(rule_refs_cnt)
+    rule_refs_cnt = dict(collections.Counter(rule_refs))
+    rule_refs_distribution = collections.Counter(rule_refs_cnt.values())
     rule_refs_avg = sum(k * v for k, v in rule_refs_distribution.items()
                        ) / float(sum(rule_refs_distribution.values()))
+
+    # split the ruleset
     subset1 = []
     subset2 = []
     for rule in ruleset:
@@ -266,11 +288,12 @@ def grouping(ruleset, ruleset_txt, max_group_num):
         else:
             subset1.append(rule)
 
+    print("bit selected: %s" % bit_array)
     print("rule refs distribution: %s" % dict(rule_refs_distribution))
     print("average rule refs: %f" % rule_refs_avg)
     print("rule split finished, subset1:%d, subset2:%d" % (len(subset1),
         len(subset2)))
-    return rule_refs_distribution
+    return subset1, subset2
 
 
 def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
@@ -440,7 +463,7 @@ if __name__ == '__main__':
 
     start_time = time.clock()
     ruleset, ruleset_text = load_ruleset(sys.argv[1])
-    grouping(ruleset, ruleset_text, 1)
+    grouping(ruleset, ruleset_text, 5)
     #max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
     #    total_mem_size = build_tree(ruleset, ruleset_text)
     end_time = time.clock()
