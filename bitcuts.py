@@ -229,9 +229,9 @@ def build_tree(ruleset, ruleset_text):
                 #        else:
                 #            result_file.write('\t' * level + len(new_msg + str(i) + ': ') * ' ' + ruleset_text[r[DIM_MAX][0]][:-1] + '\n')
                 total_leaf_number += 1
-                total_leaf_depth += curr_depth + len(subset)
-                if max_leaf_depth < curr_depth + len(subset):
-                    max_leaf_depth = curr_depth + len(subset)
+                total_leaf_depth += curr_depth + 2 + len(subset)
+                if max_leaf_depth < curr_depth + 2 + len(subset):
+                    max_leaf_depth = curr_depth + 2 + len(subset)
                 if bottom_level == True:
                     total_mem_size += LEAF_BUCKET_STRUCTURE_SIZE + len(subset) \
                         * LINEAR_BUCKET_SIZE
@@ -475,7 +475,8 @@ if __name__ == '__main__':
         print("average mem access: %f"%average_access_time)
         print("worst mem access: %d"%max_leaf_depth)
         print("mem size: %.2f KB"%(total_mem_size/1024.0))
-        print("max level: %d"%max_depth)
+        print("max tree depth: %d"%max_depth)
+        print("rule nums: %d" % len(r_set))
     end_time = time.clock()
     print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
 
