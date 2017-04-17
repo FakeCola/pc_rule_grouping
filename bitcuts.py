@@ -251,14 +251,15 @@ def grouping(ruleset, ruleset_txt, max_group_num=float('inf'),
     subset2 = ruleset # for further grouping
     group_idx = 0
     while group_idx < max_group_num:
-        print("Group No.%d:" % group_idx)
+        print("--  Group %d  --" % group_idx)
         subset1, subset2 = one_level_tree_grouping(subset2, 8)
         grouped_rulesets.append(subset1)
         group_idx += 1
         if len(subset2) < max_remained_rules:
             break
     grouped_rulesets.append(subset2)
-    print("Grouping result:\nruleset nums: %s", map(len, grouped_rulesets))
+    print("--  grouping result  --")
+    print("ruleset nums: %s", map(len, grouped_rulesets))
     return grouped_rulesets
 
 
@@ -289,10 +290,9 @@ def one_level_tree_grouping(ruleset, max_bit_array_length):
             subset1.append(rule)
 
     print("bit selected: %s" % bit_array)
-    print("rule refs distribution: %s" % dict(rule_refs_distribution))
-    print("average rule refs: %f" % rule_refs_avg)
-    print("rule split finished, subset1:%d, subset2:%d" % (len(subset1),
-        len(subset2)))
+    print("refs distribution: %s" % dict(rule_refs_distribution))
+    print("average refs: %f" % rule_refs_avg)
+    print("subset1: %d, subset2: %d" % (len(subset1), len(subset2)))
     return subset1, subset2
 
 
@@ -463,7 +463,22 @@ if __name__ == '__main__':
 
     start_time = time.clock()
     ruleset, ruleset_text = load_ruleset(sys.argv[1])
-    grouping(ruleset, ruleset_text, 5)
+    print("====>  grouping started")
+    rulesets = grouping(ruleset, ruleset_text, 5)
+    print("====>  grouping finished")
+    print("\n====>  building tree")
+    for tree_idx, r_set in enumerate(rulesets):
+        print("--  tree %d  --" % tree_idx)
+        max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
+            total_mem_size = build_tree(r_set, ruleset_text)
+        average_access_time = float(total_leaf_depth)/float(total_leaf_number)
+        print("average mem access: %f"%average_access_time)
+        print("worst mem access: %d"%max_leaf_depth)
+        print("mem size: %.2f KB"%(total_mem_size/1024.0))
+        print("max level: %d"%max_depth)
+    end_time = time.clock()
+    print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
+
     #max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
     #    total_mem_size = build_tree(ruleset, ruleset_text)
     end_time = time.clock()
