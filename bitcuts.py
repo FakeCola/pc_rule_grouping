@@ -28,6 +28,11 @@ LEAF_BUCKET_STRUCTURE_SIZE = 4
 LINEAR_BUCKET_SIZE = 4
 
 
+# EffiCuts parameter
+IP_BIN_RATIO = 0.05
+PORT_BIN_RATIO = 0.5
+PROTO_BIN_RATIO = 1
+
 # rule format:
 # [[sip_begin, sip_end, sip_mask_len], [dip_begin, dip_end, dip_mask_len] ...,
 # [proto_begin, proto_end], [pri]]
@@ -245,7 +250,7 @@ def build_tree(ruleset, ruleset_text):
         total_mem_size
 
 
-def grouping(ruleset, ruleset_txt, max_group_num=float('inf'),
+def grouping(ruleset, ruleset_text, max_group_num=float('inf'),
     max_remained_rules=100):
     grouped_rulesets = []
     subset2 = ruleset # for further grouping
@@ -294,6 +299,87 @@ def one_level_tree_grouping(ruleset, max_bit_array_length):
     print("average refs: %f" % rule_refs_avg)
     print("subset1: %d, subset2: %d" % (len(subset1), len(subset2)))
     return subset1, subset2
+
+
+def grouping_efficuts(ruleset, ruleset_text):
+    largeness_fraction = [IP_BIN_RATIO, IP_BIN_RATIO, PORT_BIN_RATIO,
+                          PORT_BIN_RATIO, PROTO_BIN_RATIO]
+    assert len(largeness_fraction) == DIM_MAX, ("largeness fraction of each "
+        "dimension should be assigned")
+    big_rules = [[] for _ in range(5)]
+    kinda_big_rules = [[] for _ in range(10)]
+    medium_rules = [[] for _ in range(10)]
+    small_rules = []
+
+    fields = [0] * DIM_MAX
+    for rule in ruleset:
+        small_fields = []
+        for dim in range(DIM_MAX):
+            fields[dim] = rule[dim][1] - rule[dim][0]
+            if fields[dim] < DIM_POINT_MAX[dim] * largeness_fraction[dim]:
+                small_fields.append(dim)
+        wild_field_num = DIM_MAX - len(small_fields)
+        if wild_field_num == 5:
+            big_rules[fields.index(min(fields[:-1]))].append(rule)
+        elif wild_field_num == 4:
+            big_rules[small_fields[0]].append(rule)
+        elif wild_field_num == 3:
+            small_fields_set = set(small_fields)
+            if set([0, 1]) == small_fields_set:
+                kinda_big_rules[9].append(rule)
+            elif set([0, 2]) == small_fields_set:
+                kinda_big_rules[8].append(rule)
+            elif set([0, 3]) == small_fields_set:
+                kinda_big_rules[7].append(rule)
+            elif set([0, 4]) == small_fields_set:
+                kinda_big_rules[6].append(rule)
+            elif set([1, 2]) == small_fields_set:
+                kinda_big_rules[5].append(rule)
+            elif set([1, 3]) == small_fields_set:
+                kinda_big_rules[4].append(rule)
+            elif set([1, 4]) == small_fields_set:
+                kinda_big_rules[3].append(rule)
+            elif set([2, 3]) == small_fields_set:
+                kinda_big_rules[2].append(rule)
+            elif set([2, 4]) == small_fields_set:
+                kinda_big_rules[1].append(rule)
+            else:  # set([3, 4]) == small_fields_set:
+                kinda_big_rules[0].append(rule)
+        elif wild_field_num == 2:
+            small_fields_set = set(small_fields)
+            if set([0, 1, 2]) == small_fields_set:
+                medium_rules[9].append(rule)
+            elif set([0, 1, 3]) == small_fields_set:
+                medium_rules[8].append(rule)
+            elif set([0, 1, 4]) == small_fields_set:
+                medium_rules[7].append(rule)
+            elif set([0, 2, 3]) == small_fields_set:
+                medium_rules[6].append(rule)
+            elif set([0, 2, 4]) == small_fields_set:
+                medium_rules[5].append(rule)
+            elif set([0, 3, 4]) == small_fields_set:
+                medium_rules[4].append(rule)
+            elif set([1, 2, 3]) == small_fields_set:
+                medium_rules[3].append(rule)
+            elif set([1, 2, 4]) == small_fields_set:
+                medium_rules[2].append(rule)
+            elif set([1, 3, 4]) == small_fields_set:
+                medium_rules[1].append(rule)
+            else:  # set([2, 3, 4]) == small_fields_set:
+                medium_rules[0].append(rule)
+        else:  # wild_field_num <= 1
+            small_rules.append(rule)
+    group_flag = [0] * 26
+    grouped_rulesets = [0] * 26
+    grouped_rulesets[:5] = big_rules
+    grouped_rulesets[5:15] = kinda_big_rules
+    grouped_rulesets[15:25] = medium_rules
+    grouped_rulesets[-1] = small_rules
+    ruleset_flag = map(lambda x: 1 if len(x) > 0 else 0, grouped_rulesets)
+    print("--  before merge  --")
+    print("group nums: %d" % sum(ruleset_flag))
+    print("ruleset nums:\n %s" % map(len, grouped_rulesets))
+    print("ruleset flags:\n %s" % ruleset_flag)
 
 
 def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
@@ -459,41 +545,23 @@ if __name__ == '__main__':
 
     logger = logging.getLogger(__name__)
     filename = sys.argv[1] + '_result'
-    # result_file = open(filename, 'w')
 
     start_time = time.clock()
     ruleset, ruleset_text = load_ruleset(sys.argv[1])
-    print("====>  grouping started")
-    rulesets = grouping(ruleset, ruleset_text, 5)
-    print("====>  grouping finished")
-    print("\n====>  building tree")
-    for tree_idx, r_set in enumerate(rulesets):
-        print("--  tree %d  --" % tree_idx)
-        max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
-            total_mem_size = build_tree(r_set, ruleset_text)
-        average_access_time = float(total_leaf_depth)/float(total_leaf_number)
-        print("average mem access: %f"%average_access_time)
-        print("worst mem access: %d"%max_leaf_depth)
-        print("mem size: %.2f KB"%(total_mem_size/1024.0))
-        print("max tree depth: %d"%max_depth)
-        print("rule nums: %d" % len(r_set))
-    end_time = time.clock()
-    print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
-
-    #max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
-    #    total_mem_size = build_tree(ruleset, ruleset_text)
-    end_time = time.clock()
-    ## result_file.write("total rules: %d\n"%len(ruleset)+'*'*20+'\n')
-    #average_access_time = float(total_leaf_depth)/float(total_leaf_number)
-    #logger.info("average mem access: %f"%average_access_time)
-    #logger.info("worst mem access: %d"%max_leaf_depth)
-    #logger.info("mem size: %.2f KB"%(total_mem_size/1024.0))
-    #logger.info("max level: %d"%max_depth)
-    #logger.info("Preprocessing time is %.03f ms"%((end_time - start_time)*1000))
-    ## result_file.write('\n'+'*'*20+'\n')
-    ## result_file.write("total leaf number: %d\n"%total_leaf_number)
-    ## result_file.write("average mem access: %f\n"%average_access_time)
-    ## result_file.write("worst mem access: %d\n"%max_leaf_depth)
-    ## result_file.write("mem size: %.2f KB\n"%(total_mem_size/1024.0))
-    ## result_file.write("max level: %d\n"%max_depth)
-    ## result_file.close()
+    grouping_efficuts(ruleset, ruleset_text)
+    #print("====>  grouping started")
+    #rulesets = grouping(ruleset, ruleset_text, 5)
+    #print("====>  grouping finished")
+    #print("\n====>  building tree")
+    #for tree_idx, r_set in enumerate(rulesets):
+    #    print("--  tree %d  --" % tree_idx)
+    #    max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
+    #        total_mem_size = build_tree(r_set, ruleset_text)
+    #    average_access_time = float(total_leaf_depth)/float(total_leaf_number)
+    #    print("average mem access: %f"%average_access_time)
+    #    print("worst mem access: %d"%max_leaf_depth)
+    #    print("mem size: %.2f KB"%(total_mem_size/1024.0))
+    #    print("max tree depth: %d"%max_depth)
+    #    print("rule nums: %d" % len(r_set))
+    #end_time = time.clock()
+    #print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
