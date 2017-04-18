@@ -363,6 +363,19 @@ def grouping_efficuts(ruleset, ruleset_text):
 def merging_efficuts(grouped_rulesets, ruleset_flag):
     merged = map(lambda x: x == 0, ruleset_flag)
 
+    merge_dict = dict()
+    wild3_combinations = list(itertools.combinations(range(5), 2))
+    for i in range(5):
+        merge_dict[i] = map(lambda x: x+5, filter(
+            lambda x: i in wild3_combinations[x],
+            range(len(wild3_combinations))))
+    wild2_combinations = list(itertools.combinations(range(5), 3))
+    for i, wild3_comb_set in enumerate(map(set, wild3_combinations)):
+        merge_dict[i+5] = map(lambda x: x+15, filter(
+            lambda x: len(wild3_comb_set - set(wild2_combinations[x])) == 0,
+            range(len(wild2_combinations))))
+    print(merge_dict)
+
 
 def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
     use_spfac=True, verbose=False):
