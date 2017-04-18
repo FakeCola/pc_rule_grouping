@@ -8,6 +8,7 @@ import copy
 import collections
 import logging
 import time
+import itertools
 
 
 DIM_SIP, DIM_DIP, DIM_SPORT, DIM_DPORT, DIM_PROTO, DIM_MAX = range(6)
@@ -312,6 +313,10 @@ def grouping_efficuts(ruleset, ruleset_text):
     small_rules = []
 
     fields = [0] * DIM_MAX
+    wild3_dict = {bin_id: set(comb) for bin_id, comb in enumerate(
+        itertools.combinations(range(DIM_MAX), 2))}
+    wild2_dict = {bin_id: set(comb) for bin_id, comb in enumerate(
+        itertools.combinations(range(DIM_MAX), 3))}
     for rule in ruleset:
         small_fields = []
         for dim in range(DIM_MAX):
@@ -325,61 +330,38 @@ def grouping_efficuts(ruleset, ruleset_text):
             big_rules[small_fields[0]].append(rule)
         elif wild_field_num == 3:
             small_fields_set = set(small_fields)
-            if set([0, 1]) == small_fields_set:
-                kinda_big_rules[9].append(rule)
-            elif set([0, 2]) == small_fields_set:
-                kinda_big_rules[8].append(rule)
-            elif set([0, 3]) == small_fields_set:
-                kinda_big_rules[7].append(rule)
-            elif set([0, 4]) == small_fields_set:
-                kinda_big_rules[6].append(rule)
-            elif set([1, 2]) == small_fields_set:
-                kinda_big_rules[5].append(rule)
-            elif set([1, 3]) == small_fields_set:
-                kinda_big_rules[4].append(rule)
-            elif set([1, 4]) == small_fields_set:
-                kinda_big_rules[3].append(rule)
-            elif set([2, 3]) == small_fields_set:
-                kinda_big_rules[2].append(rule)
-            elif set([2, 4]) == small_fields_set:
-                kinda_big_rules[1].append(rule)
-            else:  # set([3, 4]) == small_fields_set:
-                kinda_big_rules[0].append(rule)
+            for bin_id, comb_set in wild3_dict.iteritems():
+                if comb_set == small_fields_set:
+                    kinda_big_rules[bin_id].append(rule)
+                    break
         elif wild_field_num == 2:
             small_fields_set = set(small_fields)
-            if set([0, 1, 2]) == small_fields_set:
-                medium_rules[9].append(rule)
-            elif set([0, 1, 3]) == small_fields_set:
-                medium_rules[8].append(rule)
-            elif set([0, 1, 4]) == small_fields_set:
-                medium_rules[7].append(rule)
-            elif set([0, 2, 3]) == small_fields_set:
-                medium_rules[6].append(rule)
-            elif set([0, 2, 4]) == small_fields_set:
-                medium_rules[5].append(rule)
-            elif set([0, 3, 4]) == small_fields_set:
-                medium_rules[4].append(rule)
-            elif set([1, 2, 3]) == small_fields_set:
-                medium_rules[3].append(rule)
-            elif set([1, 2, 4]) == small_fields_set:
-                medium_rules[2].append(rule)
-            elif set([1, 3, 4]) == small_fields_set:
-                medium_rules[1].append(rule)
-            else:  # set([2, 3, 4]) == small_fields_set:
-                medium_rules[0].append(rule)
+            for bin_id, comb_set in wild2_dict.iteritems():
+                if comb_set == small_fields_set:
+                    medium_rules[bin_id].append(rule)
+                    break
         else:  # wild_field_num <= 1
             small_rules.append(rule)
+
     group_flag = [0] * 26
     grouped_rulesets = [0] * 26
     grouped_rulesets[:5] = big_rules
     grouped_rulesets[5:15] = kinda_big_rules
     grouped_rulesets[15:25] = medium_rules
     grouped_rulesets[-1] = small_rules
+
     ruleset_flag = map(lambda x: 1 if len(x) > 0 else 0, grouped_rulesets)
     print("--  before merge  --")
     print("group nums: %d" % sum(ruleset_flag))
     print("ruleset nums:\n %s" % map(len, grouped_rulesets))
     print("ruleset flags:\n %s" % ruleset_flag)
+
+    merging_efficuts(grouped_rulesets, ruleset_flag)
+    return grouped_rulesets
+
+
+def merging_efficuts(grouped_rulesets, ruleset_flag):
+    merged = map(lambda x: x == 0, ruleset_flag)
 
 
 def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
