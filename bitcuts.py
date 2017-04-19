@@ -265,7 +265,7 @@ def grouping(ruleset, ruleset_text, max_group_num=float('inf'),
             break
     grouped_rulesets.append(subset2)
     print("--  grouping result  --")
-    print("ruleset nums: %s", map(len, grouped_rulesets))
+    print("ruleset nums: %s" % map(len, grouped_rulesets))
     return grouped_rulesets
 
 
@@ -302,7 +302,9 @@ def one_level_tree_grouping(ruleset, max_bit_array_length):
     return subset1, subset2
 
 
+# grouping algorithm by efficuts
 def grouping_efficuts(ruleset, ruleset_text):
+    # initialization
     largeness_fraction = [IP_BIN_RATIO, IP_BIN_RATIO, PORT_BIN_RATIO,
                           PORT_BIN_RATIO, PROTO_BIN_RATIO]
     assert len(largeness_fraction) == DIM_MAX, ("largeness fraction of each "
@@ -311,12 +313,14 @@ def grouping_efficuts(ruleset, ruleset_text):
     kinda_big_rules = [[] for _ in range(10)]
     medium_rules = [[] for _ in range(10)]
     small_rules = []
-
     fields = [0] * DIM_MAX
+    # get combinations of 2 wildcard fields and 3 wildcard fields
     wild3_dict = {bin_id: set(comb) for bin_id, comb in enumerate(
         itertools.combinations(range(DIM_MAX), 2))}
     wild2_dict = {bin_id: set(comb) for bin_id, comb in enumerate(
         itertools.combinations(range(DIM_MAX), 3))}
+
+    # grouping by non-wildcard fields
     for rule in ruleset:
         small_fields = []
         for dim in range(DIM_MAX):
@@ -343,26 +347,36 @@ def grouping_efficuts(ruleset, ruleset_text):
         else:  # wild_field_num <= 1
             small_rules.append(rule)
 
-    group_flag = [0] * 26
+    # sort grouping result
     grouped_rulesets = [0] * 26
     grouped_rulesets[:5] = big_rules
     grouped_rulesets[5:15] = kinda_big_rules
     grouped_rulesets[15:25] = medium_rules
     grouped_rulesets[-1] = small_rules
-
     ruleset_flag = map(lambda x: 1 if len(x) > 0 else 0, grouped_rulesets)
     print("--  before merge  --")
     print("group nums: %d" % sum(ruleset_flag))
     print("ruleset nums:\n %s" % map(len, grouped_rulesets))
     print("ruleset flags:\n %s" % ruleset_flag)
 
+    # merge
     merging_efficuts(grouped_rulesets, ruleset_flag)
+    print("--  after merge  --")
+    print("group nums: %d" % sum(ruleset_flag))
+    print("ruleset nums:\n %s" % map(len, grouped_rulesets))
+    print("ruleset flags:\n %s" % ruleset_flag)
+
+    # final groups
+    grouped_rulesets = filter(lambda x: len(x), grouped_rulesets)
+    print("--  grouping result  --")
+    print("ruleset nums: %s" % map(len, grouped_rulesets))
+
     return grouped_rulesets
 
 
 def merging_efficuts(grouped_rulesets, ruleset_flag):
-    merged = map(lambda x: x == 0, ruleset_flag)
-
+    merged = [False] * len(grouped_rulesets)
+    # get merge order
     merge_dict = dict()
     wild3_combinations = list(itertools.combinations(range(5), 2))
     for i in range(5):
@@ -374,7 +388,19 @@ def merging_efficuts(grouped_rulesets, ruleset_flag):
         merge_dict[i+5] = map(lambda x: x+15, filter(
             lambda x: len(wild3_comb_set - set(wild2_combinations[x])) == 0,
             range(len(wild2_combinations))))
-    print(merge_dict)
+    # start merging
+    print("--  merge info  --")
+    for idx in range(15):
+        if ruleset_flag[idx] == 1:
+            for i in merge_dict[idx]:
+                if ruleset_flag[i] == 1 and not merged[i]:
+                    grouped_rulesets[idx].extend(grouped_rulesets[i])
+                    grouped_rulesets[i] = []
+                    ruleset_flag[i] = 0
+                    merged[idx] = True
+                    print("group %d is merged to group %d" % (i, idx))
+                    break
+
 
 
 def bit_select(ruleset, avaliable_bit_array, max_bit_array_length=float('inf'),
