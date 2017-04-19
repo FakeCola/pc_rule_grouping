@@ -29,10 +29,11 @@ LEAF_BUCKET_STRUCTURE_SIZE = 4
 LINEAR_BUCKET_SIZE = 4
 
 
-# EffiCuts parameter
+# EffiCuts grouping parameter
 IP_BIN_RATIO = 0.05
 PORT_BIN_RATIO = 0.5
 PROTO_BIN_RATIO = 1
+
 
 # rule format:
 # [[sip_begin, sip_end, sip_mask_len], [dip_begin, dip_end, dip_mask_len] ...,
@@ -258,7 +259,7 @@ def grouping(ruleset, ruleset_text, max_group_num=float('inf'),
     group_idx = 0
     while group_idx < max_group_num:
         print("--  Group %d  --" % group_idx)
-        subset1, subset2 = one_level_tree_grouping(subset2, 8)
+        subset1, subset2 = one_level_tree_grouping(subset2)
         grouped_rulesets.append(subset1)
         group_idx += 1
         if len(subset2) < max_remained_rules:
@@ -270,10 +271,10 @@ def grouping(ruleset, ruleset_text, max_group_num=float('inf'),
 
 
 
-def one_level_tree_grouping(ruleset, max_bit_array_length):
+def one_level_tree_grouping(ruleset):
     # build one-level tree
     bit_array, _, split_info = bit_select(ruleset, range(BIT_LENGTH),
-        max_bit_array_length, use_spfac=False, verbose=True)
+        use_spfac=True, verbose=True)
     buckets, max_bucket_size, max_bucket_num, _ = split_info
 
     # count replication
