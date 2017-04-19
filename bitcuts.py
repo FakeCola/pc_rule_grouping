@@ -195,7 +195,7 @@ def build_tree(ruleset, ruleset_text):
             if max_leaf_depth < curr_depth + len(curr_ruleset):
                 max_leaf_depth = curr_depth + len(curr_ruleset)
             # append memory cost for storing the rules
-            total_mem_size += len(curr_ruleset) * LINEAR_BUCKT_SIZE
+            total_mem_size += len(curr_ruleset) * LINEAR_BUCKET_SIZE
             continue
 
         buckets, max_bucket_size, max_bucket_num, bucket_percentage_stat = \
@@ -552,10 +552,14 @@ def pair_dict_sub(pair_dict1, pair_dict2):
 
 
 if __name__ == '__main__':
-    if len(sys.argv) < 2:
-        print('Usage: %s ruleset' % sys.argv[0])
+    if len(sys.argv) < 3:
+        print('Usage: %s ruleset [bit|effi]' % sys.argv[0])
         sys.exit(0)
-    if len(sys.argv) == 2:
+    if sys.argv[2] not in ['bit', 'effi']:
+        print("Only 'bit' and 'effi' are supported for grouping")
+        sys.exit(0)
+
+    if len(sys.argv) == 3:
         logging.basicConfig(format='%(levelname)s: %(message)s',
             level=logging.INFO)
     else:
@@ -567,22 +571,38 @@ if __name__ == '__main__':
     logger = logging.getLogger(__name__)
     filename = sys.argv[1] + '_result'
 
+    total_worst_mem_access = 0
+    total_average_mem_access = 0
+    total_memory_size = 0
     start_time = time.clock()
+
     ruleset, ruleset_text = load_ruleset(sys.argv[1])
-    grouping_efficuts(ruleset, ruleset_text)
-    #print("====>  grouping started")
-    #rulesets = grouping(ruleset, ruleset_text, 5)
-    #print("====>  grouping finished")
-    #print("\n====>  building tree")
-    #for tree_idx, r_set in enumerate(rulesets):
-    #    print("--  tree %d  --" % tree_idx)
-    #    max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
-    #        total_mem_size = build_tree(r_set, ruleset_text)
-    #    average_access_time = float(total_leaf_depth)/float(total_leaf_number)
-    #    print("average mem access: %f"%average_access_time)
-    #    print("worst mem access: %d"%max_leaf_depth)
-    #    print("mem size: %.2f KB"%(total_mem_size/1024.0))
-    #    print("max tree depth: %d"%max_depth)
-    #    print("rule nums: %d" % len(r_set))
-    #end_time = time.clock()
-    #print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
+
+    print("====>  grouping started")
+    if sys.argv[2] == 'bit':
+        rulesets = grouping(ruleset, ruleset_text, 10)
+    elif sys.argv[2] == 'effi':
+        rulesets = grouping_efficuts(ruleset, ruleset_text)
+    print("====>  grouping finished")
+
+    print("\n====>  building tree started")
+    for tree_idx, r_set in enumerate(rulesets):
+        print("--  tree %d  --" % tree_idx)
+        max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
+            total_mem_size = build_tree(r_set, ruleset_text)
+        average_access_time = float(total_leaf_depth)/float(total_leaf_number)
+        total_worst_mem_access += max_leaf_depth
+        total_average_mem_access += average_access_time
+        total_memory_size += total_mem_size
+        print("average mem access: %f"%average_access_time)
+        print("worst mem access: %d"%max_leaf_depth)
+        print("mem size: %.2f KB"%(total_mem_size/1024.0))
+        print("max tree depth: %d"%max_depth)
+        print("rule nums: %d" % len(r_set))
+    end_time = time.clock()
+    print("\n====>  building tree finished")
+
+    print("total average mem access: %f"%total_average_mem_access)
+    print("total worst mem access: %d"%total_worst_mem_access)
+    print("total mem size: %.2f KB"%total_memory_size)
+    print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
