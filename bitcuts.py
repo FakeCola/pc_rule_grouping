@@ -390,9 +390,9 @@ def merging_efficuts(grouped_rulesets, ruleset_flag):
             range(len(wild2_combinations))))
     # start merging
     print("--  merge info  --")
-    for idx in range(15):
+    for idx in range(5) + range(5, 15)[::-1]:
         if ruleset_flag[idx] == 1:
-            for i in merge_dict[idx]:
+            for i in merge_dict[idx][::-1]:
                 if ruleset_flag[i] == 1 and not merged[i]:
                     grouped_rulesets[idx].extend(grouped_rulesets[i])
                     grouped_rulesets[i] = []
