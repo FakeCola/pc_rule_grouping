@@ -600,9 +600,9 @@ if __name__ == '__main__':
         print("max tree depth: %d"%max_depth)
         print("rule nums: %d" % len(r_set))
     end_time = time.clock()
-    print("\n====>  building tree finished")
+    print("====>  building tree finished\n")
 
     print("total average mem access: %f"%total_average_mem_access)
     print("total worst mem access: %d"%total_worst_mem_access)
-    print("total mem size: %.2f KB"%total_memory_size)
+    print("total mem size: %.2f KB"%(total_memory_size/1024.0))
     print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
