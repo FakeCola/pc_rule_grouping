@@ -1,0 +1,5 @@
+Here is our EffiCuts code. There is a "readme.txt" inside it that explains how to build and run the algorithm on ClassBench-generated classifiers. These are some quick notes:
+
+1. EffiCuts does not address updates. We had a followup paper, "TreeCAM: Decoupling Updates and Lookups in Packet Classification" in CoNEXT 2011. TreeCAM relies on EffiCuts to build trees, but uses a hybrid of TCAMs in combination with decision trees (shadow data structures that reside in SRAM) to take care of updates. You might want to look into that.
+
+2. A while back we shared our code with Karthikeyan Sankaralingam (U. Wisc) and they built a system around it ("Experiences in Co-designing a Packet Classification Algorithm and a Flexible Hardware Platform" in ANCS 2011). It is possible that they have a more polishedcode base now.
