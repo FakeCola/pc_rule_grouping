@@ -9,6 +9,7 @@ import collections
 import logging
 import time
 import itertools
+import argparse
 
 
 DIM_SIP, DIM_DIP, DIM_SPORT, DIM_DPORT, DIM_PROTO, DIM_MAX = range(6)
@@ -34,6 +35,10 @@ IP_BIN_RATIO = 0.05
 PORT_BIN_RATIO = 0.5
 PROTO_BIN_RATIO = 1
 
+# BitCuts grouping parameter
+OPTIMIZE_RATIO = 0.8
+MAX_REMAINED_RULES = 100
+MAX_GROUP_NUM = 10
 
 # rule format:
 # [[sip_begin, sip_end, sip_mask_len], [dip_begin, dip_end, dip_mask_len] ...,
@@ -252,14 +257,83 @@ def build_tree(ruleset, ruleset_text):
         total_mem_size
 
 
-def grouping(ruleset, ruleset_text, max_group_num=float('inf'),
-    max_remained_rules=100):
+def grouping_optimize(ruleset, ruleset_text, memory_boundary,
+    max_group_num=float('inf')):
+    separable_rulesets = []
+    unseparable_rulesets = [ruleset]  # for further grouping
+    group_idx = 0
+    grouping_bias = [0]
+    grouping_mem = []
+    exhausted_idx = 0  # group_idx before which cannot further be adjusted
+    while group_idx < max_group_num:
+        print("--  Group %d  --" % group_idx)
+
+        (subset1, subset2), is_exhausted = one_level_tree_grouping(
+            unseparable_rulesets[-1], grouping_bias[-1])
+
+        # check whether exhausted:
+        if is_exhausted and exhausted_idx == group_idx:
+            exhausted_idx += 1
+
+        max_depth1, max_leaf_depth1, total_leaf_number1, total_leaf_depth1, \
+            total_mem_size1 = build_tree(subset1, ruleset_text)
+        avg_access_time1 = float(total_leaf_depth1) / float(total_leaf_number1)
+        print("Tree1 : max_depth=%d, max_leaf_depth=%d, avg_access_time=%f, "
+              "total_mem_size=%f KB" % (max_depth1, max_leaf_depth1,
+              avg_access_time1, total_mem_size1/1024.0))
+        separable_rulesets.append(subset1)
+
+        # backtrack when memory exceeds threshold
+        grouping_mem.append(total_mem_size1)
+        if sum(grouping_mem) > memory_boundary:
+            if group_idx >= exhausted_idx:
+                print("Memory exceeds threshold!")
+                backtracking_idx = grouping_bias[exhausted_idx:].index(
+                    grouping_bias[-1]) + exhausted_idx
+                group_idx = backtracking_idx
+                print("==> Backtracking to group %d" % group_idx)
+                separable_rulesets = separable_rulesets[:group_idx]
+                unseparable_rulesets = unseparable_rulesets[:group_idx+1]
+                grouping_bias = grouping_bias[:group_idx+1]
+                grouping_bias[-1] += 1
+                grouping_mem = grouping_mem[:group_idx]
+                continue
+            else:
+                # unable to reach the goal
+                print("failed to decrease the memory size to smaller than given"
+                    " value")
+                return False, None, -1
+
+        max_depth2, max_leaf_depth2, total_leaf_number2, total_leaf_depth2, \
+            total_mem_size2 = build_tree(subset2, ruleset_text)
+        avg_access_time2 = float(total_leaf_depth2) / float(total_leaf_number2)
+        print("Tree2 : max_depth=%d, max_leaf_depth=%d, avg_access_time=%f, "
+              "total_mem_size=%f KB" % (max_depth2, max_leaf_depth2,
+              avg_access_time2, total_mem_size2/1024.0))
+        unseparable_rulesets.append(subset2)
+
+        group_idx += 1
+        total_grouping_mem = sum(grouping_mem) + total_mem_size2
+        if total_grouping_mem < memory_boundary:
+            break
+        grouping_bias.append(0)
+
+    grouped_rulesets = separable_rulesets + [unseparable_rulesets[-1]]
+    print("--  grouping result  --")
+    print("grouping bias: %s" % grouping_bias)
+    print("ruleset nums: %s" % map(len, grouped_rulesets))
+    print("total memory size: %.3f KB" % (total_grouping_mem/1024.0))
+    return True, grouped_rulesets, total_grouping_mem
+
+
+def grouping_base(ruleset, ruleset_text, max_group_num=float('inf'),
+    max_remained_rules=MAX_REMAINED_RULES):
     grouped_rulesets = []
     subset2 = ruleset # for further grouping
     group_idx = 0
     while group_idx < max_group_num:
         print("--  Group %d  --" % group_idx)
-        subset1, subset2 = one_level_tree_grouping(subset2)
+        (subset1, subset2), _ = one_level_tree_grouping(subset2)
         grouped_rulesets.append(subset1)
         group_idx += 1
         if len(subset2) < max_remained_rules:
@@ -270,37 +344,41 @@ def grouping(ruleset, ruleset_text, max_group_num=float('inf'),
     return grouped_rulesets
 
 
-
-def one_level_tree_grouping(ruleset):
+def one_level_tree_grouping(ruleset, bias=0):
     # build one-level tree
     bit_array, _, split_info = bit_select(ruleset, range(BIT_LENGTH),
         use_spfac=True, verbose=True)
     buckets, max_bucket_size, max_bucket_num, _ = split_info
 
     # count replication
-    rule_refs = []
+    rule_ref = []
     for bucket in buckets:
-        rule_refs.extend(map(lambda r: r[DIM_MAX][0], bucket))
-    rule_refs_cnt = dict(collections.Counter(rule_refs))
-    rule_refs_distribution = collections.Counter(rule_refs_cnt.values())
-    rule_refs_avg = sum(k * v for k, v in rule_refs_distribution.items()
-                       ) / float(sum(rule_refs_distribution.values()))
+        rule_ref.extend(map(lambda r: r[DIM_MAX][0], bucket))
+    rule_ref_cnt = dict(collections.Counter(rule_ref))
+    rule_ref_dstr = collections.Counter(rule_ref_cnt.values())
+    rule_ref_avg = sum(k * v for k, v in rule_ref_dstr.items()
+                       ) / float(sum(rule_ref_dstr.values()))
 
     # split the ruleset
+    rule_ref_thres = rule_ref_avg / (2.0 ** bias)
     subset1 = []
     subset2 = []
     for rule in ruleset:
         rule_id = rule[DIM_MAX][0]
-        if rule_refs_cnt[rule_id] > rule_refs_avg:
+        if rule_ref_cnt[rule_id] > rule_ref_thres:
             subset2.append(rule)
         else:
             subset1.append(rule)
 
+    is_exhausted = False
+    if rule_ref_thres / 2.0 < min(rule_ref_dstr.keys()):
+        is_exhausted = True
+
     print("bit selected: %s" % bit_array)
-    print("refs distribution: %s" % dict(rule_refs_distribution))
-    print("average refs: %f" % rule_refs_avg)
+    print("ref distribution: %s" % dict(rule_ref_dstr))
+    print("avg ref: %f, threshold: %f" % (rule_ref_avg, rule_ref_thres))
     print("subset1: %d, subset2: %d" % (len(subset1), len(subset2)))
-    return subset1, subset2
+    return (subset1, subset2), is_exhausted
 
 
 # grouping algorithm by efficuts
@@ -551,59 +629,94 @@ def pair_dict_sub(pair_dict1, pair_dict2):
         pair_dict1[i] = pair_dict1[i] & (~pair_dict2[i])
 
 
-
-if __name__ == '__main__':
-    if len(sys.argv) < 3:
-        print('Usage: %s ruleset [bit|effi]' % sys.argv[0])
-        sys.exit(0)
-    if sys.argv[2] not in ['bit', 'effi']:
-        print("Only 'bit' and 'effi' are supported for grouping")
-        sys.exit(0)
-
-    if len(sys.argv) == 3:
-        logging.basicConfig(format='%(levelname)s: %(message)s',
-            level=logging.INFO)
-    else:
-        for arg in sys.argv[2:]:
-            if(arg == '--debug'):
-                logging.basicConfig(format='%(levelname)s: %(message)s',
-                    level=logging.DEBUG)
-
-    logger = logging.getLogger(__name__)
-    filename = sys.argv[1] + '_result'
-
+def build_multiple_trees(grouped_rulesets, ruleset_text):
     total_worst_mem_access = 0
-    total_average_mem_access = 0
+    total_avg_mem_access = 0
     total_memory_size = 0
-    start_time = time.clock()
-
-    ruleset, ruleset_text = load_ruleset(sys.argv[1])
-
-    print("====>  grouping started")
-    if sys.argv[2] == 'bit':
-        rulesets = grouping(ruleset, ruleset_text, 10)
-    elif sys.argv[2] == 'effi':
-        rulesets = grouping_efficuts(ruleset, ruleset_text)
-    print("====>  grouping finished")
 
     print("\n====>  building tree started")
-    for tree_idx, r_set in enumerate(rulesets):
+    start_time = time.clock()
+    for tree_idx, r_set in enumerate(grouped_rulesets):
         print("--  tree %d  --" % tree_idx)
         max_depth, max_leaf_depth, total_leaf_number, total_leaf_depth, \
             total_mem_size = build_tree(r_set, ruleset_text)
-        average_access_time = float(total_leaf_depth)/float(total_leaf_number)
+        avg_access_time = float(total_leaf_depth)/float(total_leaf_number)
         total_worst_mem_access += max_leaf_depth
-        total_average_mem_access += average_access_time
+        total_avg_mem_access += avg_access_time
         total_memory_size += total_mem_size
-        print("average mem access: %f"%average_access_time)
+        print("avg mem access: %f"%avg_access_time)
         print("worst mem access: %d"%max_leaf_depth)
         print("mem size: %.2f KB"%(total_mem_size/1024.0))
         print("max tree depth: %d"%max_depth)
         print("rule nums: %d" % len(r_set))
     end_time = time.clock()
-    print("====>  building tree finished\n")
+    print("====>  building tree finished")
 
-    print("total average mem access: %f"%total_average_mem_access)
+    print("total avg mem access: %f"%total_avg_mem_access)
     print("total worst mem access: %d"%total_worst_mem_access)
     print("total mem size: %.2f KB"%(total_memory_size/1024.0))
-    print("====>  preprocessing time: %.03f ms"%((end_time - start_time)*1000))
+    print("====>  building time: %.03f s\n"%(end_time - start_time))
+
+    return total_memory_size
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="Script to evaluate grouping "
+        "algorithms")
+    parser.add_argument("ruleset", help="the ruleset to load")
+    parser.add_argument("algorithm", type=str, choices=['bitcuts', 'efficuts'],
+                        help="grouping algorithm selected")
+    parser.add_argument("-n", "--max_group_num", default=MAX_GROUP_NUM,
+                        type=int, help="maximum number of groups")
+    parser.add_argument("-m", "--memory_size", type=float,
+                        help="expected memory size of data structures")
+    parser.add_argument("-o", "--optimize_ratio", type=float, help="the "
+            "decreasing ratio when optimize the memory size, only works when "
+            "--memory_size is set", default=OPTIMIZE_RATIO)
+    parser.add_argument("-v", "--verbosity", action="store_true",
+                        help="output the running log of bitcuts algorithm")
+    args = parser.parse_args()
+
+    if args.verbosity:
+        logging.basicConfig(format='%(levelname)s: %(message)s',
+            level=logging.DEBUG)
+    else:
+        logging.basicConfig(format='%(levelname)s: %(message)s',
+            level=logging.INFO)
+
+    logger = logging.getLogger(__name__)
+
+    ruleset, ruleset_text = load_ruleset(args.ruleset)
+
+    print("====>  grouping started")
+    start_time = time.clock()
+    if args.algorithm == 'bitcuts':
+        grouped_rulesets = grouping_base(ruleset, ruleset_text,
+            args.max_group_num)
+    elif args.algorithm == 'efficuts':
+        grouped_rulesets = grouping_efficuts(ruleset, ruleset_text,
+            args.max_group_num)
+    end_time = time.clock()
+    print("====>  grouping finished")
+    print("====>  grouping time: %.03f s"%(end_time - start_time))
+
+    mem_baseline = build_multiple_trees(grouped_rulesets, ruleset_text)
+    if args.memory_size is not None:
+        args.memory_size *= 1024
+        print("Considering memory size...")
+
+        print("====>  optimizing started")
+        curr_mem = mem_baseline
+        while curr_mem > args.memory_size:
+            while mem_baseline >= curr_mem:
+                mem_baseline *= args.optimize_ratio
+            mem_baseline = max([mem_baseline, args.memory_size])
+            print("\n---> mem_boundary: %.3f KB\n" % (mem_baseline/1024.0))
+            succeed, new_grouped_rulesets, curr_mem = grouping_optimize(ruleset,
+                ruleset_text, mem_baseline, args.max_group_num)
+            if not succeed:
+                break
+            grouped_rulesets = new_grouped_rulesets
+        print("====>  optimizing finished")
+
+        build_multiple_trees(grouped_rulesets, ruleset_text)

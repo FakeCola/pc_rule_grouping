@@ -13,7 +13,7 @@ for ruleset_size in 1K 5K 10K; do
     echo "============   ${ruleset}_${ruleset_size}" >> $log_file
     echo "==================================================" >> $log_file
     echo "" >> $log_file
-    for algorithm in bit; do
+    for algorithm in bitcuts; do
       echo "===========>   ${algorithm}cuts" >> $log_file
       echo "" >> $log_file
       pypy bitcuts.py ruleset/${ruleset}_${ruleset_size} $algorithm >> $log_file
