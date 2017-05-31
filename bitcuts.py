@@ -79,7 +79,7 @@ def load_ruleset(ruleset_fname):
             [dip_begin, dip_end, dip_mask_len],
             [sport_begin, sport_end], [dport_begin, dport_end],
             [proto_begin, proto_end], [idx]])
-        ruleset_text.append(line)
+        ruleset_text.append(line.strip() + " %d" % idx) # add priority
 
     return ruleset,ruleset_text
 
@@ -660,19 +660,31 @@ def build_multiple_trees(grouped_rulesets, ruleset_text):
     return total_memory_size
 
 
+def save_group_results(grouped_rulesets, ruleset_text, fname):
+    with open(fname, 'w') as fout:
+        for tree_idx, r_set in enumerate(grouped_rulesets):
+            print("#%d,%d" % (tree_idx, len(r_set)), file=fout)
+            for r in r_set:
+                print(ruleset_text[r[DIM_MAX][0]], file=fout)
+        print("====> group results saved")
+
+
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Script to evaluate grouping "
         "algorithms")
     parser.add_argument("ruleset", help="the ruleset to load")
     parser.add_argument("algorithm", type=str, choices=['bitcuts', 'efficuts'],
                         help="grouping algorithm selected")
-    parser.add_argument("-n", "--max_group_num", default=MAX_GROUP_NUM,
+    parser.add_argument("-n", "--max-group-num", default=MAX_GROUP_NUM,
                         type=int, help="maximum number of groups")
-    parser.add_argument("-m", "--memory_size", type=float,
+    parser.add_argument("-m", "--memory-size", type=float,
                         help="expected memory size of data structures")
-    parser.add_argument("-o", "--optimize_ratio", type=float, help="the "
+    parser.add_argument("-o", "--optimize-ratio", type=float, help="the "
             "decreasing ratio when optimize the memory size, only works when "
             "--memory_size is set", default=OPTIMIZE_RATIO)
+    parser.add_argument("-s", "--save-results", type=str, help="the file to "
+            "save the group results")
     parser.add_argument("-v", "--verbosity", action="store_true",
                         help="output the running log of bitcuts algorithm")
     args = parser.parse_args()
@@ -720,3 +732,6 @@ if __name__ == '__main__':
         print("====>  optimizing finished")
 
         build_multiple_trees(grouped_rulesets, ruleset_text)
+
+    if args.save_results is not None:
+        save_group_results(grouped_rulesets, ruleset_text, args.save_results)
