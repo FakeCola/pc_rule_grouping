@@ -706,8 +706,7 @@ if __name__ == '__main__':
         grouped_rulesets = grouping_base(ruleset, ruleset_text,
             args.max_group_num)
     elif args.algorithm == 'efficuts':
-        grouped_rulesets = grouping_efficuts(ruleset, ruleset_text,
-            args.max_group_num)
+        grouped_rulesets = grouping_efficuts(ruleset, ruleset_text)
     end_time = time.clock()
     print("====>  grouping finished")
     print("====>  grouping time: %.03f s"%(end_time - start_time))
