@@ -303,8 +303,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Script to evaluate grouping "
         "algorithms")
     parser.add_argument("ruleset", help="the ruleset to load")
-    parser.add_argument("algorithm", type=str, choices=['bitcuts', 'efficuts'],
-                        help="grouping algorithm selected")
+    parser.add_argument("algorithm", type=str, choices=['bitgrouping',
+                        'efficuts'], help="grouping algorithm selected")
     parser.add_argument("-n", "--max-group-num", default=MAX_GROUP_NUM,
                         type=int, help="maximum number of groups")
     parser.add_argument("-m", "--memory-size", type=float,
@@ -328,7 +328,7 @@ if __name__ == '__main__':
 
     print("====>  grouping started")
     start_time = time.clock()
-    if args.algorithm == 'bitcuts':
+    if args.algorithm == 'bitgrouping':
         grouped_rulesets = grouping_base(ruleset, ruleset_text,
             args.max_group_num)
     elif args.algorithm == 'efficuts':
